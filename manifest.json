@@ -1,0 +1,15 @@
+{
+  "name": "Generador de Instrumentos Multi-Estudiante",
+  "short_name": "Instrumentos",
+  "description": "Genera instrumentos de evaluación multi-estudiante con IA para docentes ESL en Panamá",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f5f3ee",
+  "theme_color": "#1a2332",
+  "lang": "es",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

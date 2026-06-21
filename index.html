@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="theme-color" content="#1a2332"/>
+<title>Generador de Instrumentos</title>
+<link rel="manifest" href="manifest.json"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap"/>
+<!-- mammoth.js for DOCX parsing -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<!-- PDF.js for PDF parsing -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+<!-- docx.js for Word export -->
+<script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+<style>
+:root {
+  --bg: #f5f3ee; --bg2: #eceae3; --card: #ffffff;
+  --ink: #1a1a18; --ink2: #5a5a52; --ink3: #9a9a8e;
+  --accent: #2d5f3f; --accent2: #4a8c5c; --accent-lt: #e8f3ec;
+  --purple: #4a3a8c; --purple-lt: #eeebf8;
+  --amber: #b05f1a; --amber-lt: #fdf0e3;
+  --border: rgba(26,26,24,0.1); --border2: rgba(26,26,24,0.18);
+  --radius: 12px; --radius-lg: 18px;
+  --shadow: 0 2px 12px rgba(0,0,0,0.07);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--ink); min-height: 100vh; font-size: 15px; line-height: 1.6; -webkit-text-size-adjust: 100%; }
+h1,h2,h3 { font-family: 'DM Serif Display', serif; font-weight: 400; }
+
+/* ── Header ── */
+.app-header { background: #1a2332; color: #f0ede6; padding: 0 14px; display: flex; align-items: center; gap: 8px; height: 56px; position: sticky; top: 0; z-index: 100; }
+.app-header h1 { font-size: 14px; color: #f0ede6; white-space: nowrap; flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.app-header .sub { font-size: 11px; color: #8a96a8; display: none; }
+@media(min-width:480px){ .app-header .sub { display: inline; margin-left: 2px; } }
+.header-actions { margin-left: auto; display: flex; gap: 5px; flex-shrink: 0; align-items: center; }
+.btn-sm { padding: 5px 9px; border-radius: 7px; font-size: 12px; font-weight: 500; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.08); color: #f0ede6; cursor: pointer; font-family: 'DM Sans', sans-serif; white-space: nowrap; }
+.btn-sm:hover { background: rgba(255,255,255,0.16); }
+.lang-toggle { display: flex; align-items: center; gap: 3px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 7px; padding: 5px 8px; cursor: pointer; font-size: 12px; font-weight: 700; font-family: 'DM Sans', sans-serif; user-select: none; white-space: nowrap; }
+.lt-opt { color: rgba(240,237,230,0.4); transition: color 0.2s; }
+.lt-opt.active { color: #f0ede6; }
+.lt-sep { color: rgba(240,237,230,0.2); font-weight: 300; }
+
+/* ── Model selector ── */
+.model-select { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 7px; color: #f0ede6; font-size: 11px; font-family: 'DM Sans', sans-serif; padding: 5px 6px; cursor: pointer; max-width: 130px; }
+.model-select option { background: #1a2332; color: #f0ede6; }
+
+/* ── Main ── */
+.main { max-width: 860px; margin: 0 auto; padding: 18px 14px 60px; width: 100%; }
+
+/* ── Steps ── */
+.steps-bar { display: flex; margin-bottom: 24px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.step-tab { flex: 1; padding: 10px 4px; text-align: center; cursor: pointer; font-size: 11px; font-weight: 500; color: var(--ink3); border-right: 1px solid var(--border); transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 58px; justify-content: center; }
+.step-tab:last-child { border-right: none; }
+.step-tab .step-num { width: 22px; height: 22px; border-radius: 50%; background: var(--bg2); color: var(--ink3); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+.step-tab.active { background: var(--accent-lt); color: var(--accent); }
+.step-tab.active .step-num { background: var(--accent); color: #fff; }
+.step-tab.done { color: var(--accent2); }
+.step-tab.done .step-num { background: var(--accent-lt); color: var(--accent); }
+
+/* ── Panels ── */
+.panel { display: none; animation: fadeIn 0.2s ease; }
+.panel.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── Cards ── */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 14px; box-shadow: var(--shadow); }
+.card-title { font-size: 17px; font-family: 'DM Serif Display', serif; margin-bottom: 16px; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+.card-title .icon { width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.icon-green { background: var(--accent-lt); } .icon-purple { background: var(--purple-lt); } .icon-amber { background: var(--amber-lt); }
+
+/* ── Form ── */
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.field-row.three { grid-template-columns: 1fr 1fr 1fr; }
+.field-row.full { grid-template-columns: 1fr; }
+@media(max-width:580px){ .field-row, .field-row.three { grid-template-columns: 1fr; } }
+.field label { display: block; font-size: 12px; font-weight: 600; color: var(--ink2); margin-bottom: 5px; letter-spacing: 0.03em; text-transform: uppercase; }
+.field input, .field select, .field textarea { width: 100%; padding: 9px 11px; border: 1px solid var(--border2); border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--ink); background: var(--bg); outline: none; transition: border-color 0.15s; }
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(45,95,63,0.1); }
+.field textarea { resize: vertical; min-height: 68px; }
+.field select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235a5a52' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 11px center; padding-right: 30px; }
+
+/* ── Type grid ── */
+.type-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 9px; margin-bottom: 4px; }
+.type-card { border: 1.5px solid var(--border2); border-radius: var(--radius); padding: 13px 10px; cursor: pointer; transition: all 0.15s; text-align: center; background: var(--bg); }
+.type-card:hover, .type-card.selected { border-color: var(--accent); background: var(--accent-lt); }
+.type-card .ticon { font-size: 24px; margin-bottom: 5px; }
+.type-card .tname { font-size: 13px; font-weight: 600; color: var(--ink); }
+.type-card .tdesc { font-size: 11px; color: var(--ink3); margin-top: 2px; }
+
+/* ── Upload zone ── */
+.upload-zone { border: 2px dashed var(--border2); border-radius: var(--radius); padding: 24px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--bg); }
+.upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: var(--accent-lt); }
+.upload-zone .uz-icon { font-size: 30px; margin-bottom: 6px; }
+.upload-zone p { font-size: 13px; color: var(--ink2); }
+.upload-zone strong { color: var(--accent); }
+
+/* ── Student chips ── */
+.student-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
+.student-chip { background: var(--accent-lt); color: var(--accent); border: 1px solid rgba(45,95,63,0.2); border-radius: 20px; padding: 3px 11px; font-size: 13px; display: flex; align-items: center; gap: 4px; }
+.student-chip button { background: none; border: none; cursor: pointer; color: var(--accent2); font-size: 14px; line-height: 1; padding: 0; }
+.add-manual { display: flex; gap: 7px; margin-top: 10px; }
+.add-manual input { flex: 1; }
+
+/* ── Outcomes panel ── */
+.outcomes-box { background: var(--bg2); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+.outcomes-box .ob-label { font-size: 11px; font-weight: 700; color: var(--ink2); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; }
+.outcome-item { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 7px; }
+.outcome-item input[type=checkbox] { margin-top: 3px; accent-color: var(--accent); width: 16px; height: 16px; flex-shrink: 0; }
+.outcome-item textarea { flex: 1; border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; font-size: 13px; font-family: 'DM Sans', sans-serif; background: var(--card); color: var(--ink); resize: none; outline: none; min-height: 38px; line-height: 1.5; }
+.outcome-item textarea:focus { border-color: var(--accent); }
+.outcome-item .oi-del { background: none; border: none; cursor: pointer; color: var(--ink3); font-size: 16px; padding: 2px; }
+.btn-add-outcome { margin-top: 6px; padding: 6px 14px; border-radius: 7px; border: 1.5px dashed var(--border2); background: transparent; color: var(--accent); font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+.btn-add-outcome:hover { border-color: var(--accent); background: var(--accent-lt); }
+
+/* ── AI Panel ── */
+.prompt-preview { background: var(--bg2); border-radius: 8px; padding: 12px; font-size: 12px; color: var(--ink2); line-height: 1.7; border-left: 3px solid var(--accent); margin-bottom: 14px; white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow-y: auto; }
+.btn-generate { width: 100%; padding: 13px; border-radius: var(--radius); background: var(--accent); color: #fff; font-size: 15px; font-weight: 600; border: none; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: background 0.15s; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; }
+.btn-generate:hover { background: var(--accent2); }
+.btn-generate:disabled { background: var(--ink3); cursor: not-allowed; }
+.spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Criteria editor ── */
+.criteria-list { display: flex; flex-direction: column; gap: 9px; }
+.criteria-item { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 13px; display: flex; gap: 9px; align-items: flex-start; }
+.criteria-item .ci-num { min-width: 24px; height: 24px; background: var(--accent-lt); color: var(--accent); border-radius: 50%; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+.criteria-item input { flex: 1; border: none; background: transparent; font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--ink); outline: none; padding: 1px 0; }
+.criteria-item .ci-del { background: none; border: none; cursor: pointer; color: var(--ink3); font-size: 15px; padding: 2px; }
+.btn-add-crit { margin-top: 9px; padding: 7px 14px; border-radius: 8px; border: 1.5px dashed var(--border2); background: transparent; color: var(--accent); font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+.btn-add-crit:hover { border-color: var(--accent); background: var(--accent-lt); }
+
+/* ── Score tables ── */
+.score-table-wrap, .rub-ms-wrap { overflow-x: auto; }
+.score-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.score-table th { background: #fff; color: #000; padding: 8px 8px; text-align: center; font-weight: 700; white-space: nowrap; border: 1px solid #000; }
+.score-table th.name-th { text-align: left; min-width: 130px; }
+.score-table td { border: 1px solid #000; padding: 5px 6px; text-align: center; vertical-align: middle; background: #fff; color: #000; }
+.score-table td.name-td { text-align: left; font-weight: 500; background: #fff; color: #000; font-size: 13px; }
+.score-table td.avg-td { font-weight: 700; background: #fff; color: #000; }
+.score-btns { display: flex; gap: 3px; justify-content: center; }
+.sc { width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid #000; background: #fff; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.1s; color: #000; }
+.sc.s1.on { background: #fff; border-color: #000; color: #000; font-weight: 900; text-decoration: underline; }
+.sc.s2.on { background: #fff; border-color: #000; color: #000; font-weight: 900; text-decoration: underline; }
+.sc.s3.on { background: #fff; border-color: #000; color: #000; font-weight: 900; text-decoration: underline; }
+.sc.s4.on { background: #fff; border-color: #000; color: #000; font-weight: 900; text-decoration: underline; }
+
+/* ── Rubric multi-student ── */
+.rub-desc-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 480px; margin-bottom: 20px; }
+.rub-desc-table th { background: #fff; color: #000; padding: 7px 9px; font-weight: 700; font-size: 12px; text-align: left; border: 1px solid #000; }
+.rub-desc-table td { border: 1px solid #000; padding: 6px 8px; vertical-align: top; font-size: 12px; line-height: 1.5; background: #fff; color: #000; }
+.rub-desc-table td:first-child { font-weight: 600; background: #fff; min-width: 100px; }
+.rub-reg-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 480px; }
+.rub-reg-table th { background: #fff; color: #000; padding: 5px 3px; font-weight: 700; font-size: 10px; text-align: center; border: 1px solid #000; }
+.rub-reg-table th.name-th { text-align: left; min-width: 120px; padding-left: 8px; }
+.rub-reg-table td { border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; background: #fff; }
+.rub-reg-table td.name-td { text-align: left; padding: 6px 8px; font-weight: 500; font-size: 12px; background: #fff; color: #000; }
+.rub-reg-table td.total-td { font-weight: 700; font-size: 13px; background: #fff; color: #000; min-width: 36px; }
+.rub-reg-table td.sep-col { background: #000; width: 3px; padding: 0; border: none; }
+.x-mark { width: 100%; height: 30px; background: #fff; border: none; cursor: pointer; font-size: 13px; font-weight: 700; color: transparent; transition: all 0.1s; display: block; }
+.x-mark:hover { background: #f0f0f0; color: #999; }
+.x-mark.on { color: #000; background: #fff; font-weight: 900; }
+
+/* ── Rubrica unica: single continuous table (descriptors integrated above student rows) ── */
+.rub-unica-table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 700px; }
+.rub-unica-table th { background: #fff; color: #000; padding: 4px 3px; font-weight: 700; font-size: 10px; text-align: center; border: 1px solid #000; }
+.rub-unica-table th.name-th { text-align: left; min-width: 110px; padding-left: 8px; }
+.rub-unica-table td { border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; background: #fff; }
+.rub-unica-table td.name-td { text-align: left; padding: 6px 8px; font-weight: 500; font-size: 12px; background: #fff; color: #000; }
+.rub-unica-table td.total-td { font-weight: 700; font-size: 13px; background: #fff; color: #000; min-width: 36px; }
+.rub-unica-table td.sep-col { background: #000; width: 3px; padding: 0; border: none; }
+.rub-unica-desc-row td { vertical-align: top; padding: 4px; }
+.rub-unica-desc-row td.name-td { font-size: 11px; }
+.rub-unica-desc-row textarea { width: 100%; border: none; background: transparent; font-size: 10px; line-height: 1.4; resize: none; outline: none; min-height: 70px; font-family: 'DM Sans', sans-serif; color: #000; }
+.sec-label { font-size: 11px; font-weight: 700; color: #000; text-transform: uppercase; letter-spacing: 0.04em; margin: 16px 0 7px; }
+
+/* ── Estimacion multi-student ── */
+.est-ms-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 380px; }
+.est-ms-table th { background: #fff; color: #000; padding: 5px 3px; font-weight: 700; font-size: 10px; text-align: center; border: 1px solid #000; }
+.est-ms-table th.name-th { text-align: left; min-width: 120px; padding-left: 8px; }
+.est-ms-table td { border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0; background: #fff; }
+.est-ms-table td.name-td { text-align: left; padding: 6px 8px; font-weight: 500; font-size: 12px; background: #fff; color: #000; }
+.est-ms-table td.sep-col { background: #000; width: 3px; padding: 0; border: none; }
+.ex-btn { width: 100%; height: 30px; background: #fff; border: none; cursor: pointer; font-size: 12px; font-weight: 700; color: transparent; transition: all 0.1s; display: block; }
+.ex-btn:hover { background: #f0f0f0; color: #999; }
+.ex-btn.e0.on { background: #fff; color: #000; font-weight: 900; }
+.ex-btn.e1.on { background: #fff; color: #000; font-weight: 900; }
+.ex-btn.e2.on { background: #fff; color: #000; font-weight: 900; }
+
+/* ── Anecdotal ── */
+.anec-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.anec-table th { background: #fff; color: #000; padding: 8px 10px; text-align: left; font-weight: 700; border: 1px solid #000; }
+.anec-table td { border: 1px solid #000; padding: 0; background: #fff; }
+.anec-table td.name-cell { padding: 7px 9px; font-weight: 500; min-width: 130px; background: #fff; color: #000; font-size: 13px; }
+.anec-table td textarea { width: 100%; border: none; padding: 7px 9px; font-family: 'DM Sans', sans-serif; font-size: 13px; resize: none; outline: none; min-height: 48px; background: transparent; color: #000; }
+
+/* ── Numeric ── */
+.num-input { width: 54px; text-align: center; padding: 4px 3px; border: 1px solid #000; border-radius: 6px; font-size: 13px; font-weight: 600; font-family: 'DM Sans', sans-serif; background: #fff; color: #000; outline: none; }
+.num-input:focus { border-color: #000; }
+
+/* ── Export ── */
+.export-bar { display: flex; gap: 9px; flex-wrap: wrap; margin-top: 18px; }
+.btn-export { flex: 1; min-width: 130px; padding: 11px 14px; border-radius: var(--radius); border: 1.5px solid var(--border2); background: var(--card); font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; color: var(--ink); min-height: 44px; }
+.btn-export:hover { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+.btn-export.primary { background: #1a2332; color: #f0ede6; border-color: #1a2332; }
+.btn-export.primary:hover { background: #2a3a52; }
+
+/* ── Nav ── */
+.nav-row { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; }
+.btn-nav { padding: 10px 20px; border-radius: var(--radius); border: 1.5px solid var(--border2); font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; background: var(--card); color: var(--ink); min-height: 42px; }
+.btn-nav:hover { border-color: var(--accent); color: var(--accent); }
+.btn-nav.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-nav.primary:hover { background: var(--accent2); }
+
+/* ── Info / badges ── */
+.info-box { background: var(--purple-lt); border: 1px solid rgba(74,58,140,0.15); border-radius: var(--radius); padding: 11px 14px; font-size: 13px; color: var(--purple); margin-bottom: 14px; }
+.badge-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.badge { font-size: 11px; padding: 3px 10px; border-radius: 12px; font-weight: 500; }
+.badge-green { background: var(--accent-lt); color: var(--accent); }
+.badge-amber { background: var(--amber-lt); color: var(--amber); }
+.badge-red { background: #fde8e8; color: #c0392b; }
+.badge-blue { background: #e3f0fb; color: #185FA5; }
+
+/* ── Templates ── */
+.template-list { display: flex; flex-direction: column; gap: 7px; }
+.template-item { display: flex; align-items: center; justify-content: space-between; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 14px; cursor: pointer; transition: all 0.15s; }
+.template-item:hover { border-color: var(--accent); background: var(--accent-lt); }
+.template-item .ti-name { font-weight: 600; font-size: 14px; }
+.template-item .ti-meta { font-size: 12px; color: var(--ink3); margin-top: 2px; }
+.template-item .ti-del { color: var(--ink3); background: none; border: none; cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 4px; }
+.template-item .ti-del:hover { background: #fde8e8; color: #c0392b; }
+.empty-state { text-align: center; padding: 36px 20px; color: var(--ink3); }
+.empty-state .es-icon { font-size: 38px; margin-bottom: 10px; }
+.empty-state p { font-size: 14px; }
+
+/* ── Toast ── */
+.toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px); background: #1a2332; color: #f0ede6; padding: 9px 18px; border-radius: 22px; font-size: 13px; font-weight: 500; z-index: 999; opacity: 0; transition: all 0.3s; pointer-events: none; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── Loading overlay ── */
+.loading-overlay { position: fixed; inset: 0; background: rgba(26,26,24,0.5); display: flex; align-items: center; justify-content: center; z-index: 200; }
+.loading-card { background: var(--card); border-radius: var(--radius-lg); padding: 28px 32px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+.loading-card .big-spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 14px; }
+.loading-card p { font-size: 14px; color: var(--ink2); }
+
+/* ── Print ── */
+@media print {
+  @page { size: landscape; }
+  .app-header, .steps-bar, .nav-row, .export-bar, .card-title .icon,
+  .btn-generate, .criteria-item .ci-del, .btn-add-crit, .panel:not(.active), .loading-overlay { display: none !important; }
+  body { background: #fff; font-size: 11px; }
+  .card { box-shadow: none; border: 1px solid #ccc; page-break-inside: avoid; }
+  .score-table th, .rub-desc-table th, .rub-reg-table th, .anec-table th, .est-ms-table th { background: #fff !important; color: #000 !important; border: 1px solid #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <h1 id="app-h1">Generador de Instrumentos <span class="sub" id="app-sub">ESL · Panamá</span></h1>
+  <div class="header-actions">
+    <select class="model-select" id="model-select" title="Modelo de IA">
+      <option value="llama-3.3-70b-versatile">Llama 3.3 70B</option>
+      <option value="llama-3.1-8b-instant">Llama 3.1 8B</option>
+      <option value="mixtral-8x7b-32768">Mixtral 8x7B</option>
+      <option value="gemma2-9b-it">Gemma2 9B</option>
+    </select>
+    <div class="lang-toggle" onclick="toggleLang()">
+      <span class="lt-opt" id="lt-es">ES</span>
+      <span class="lt-sep">|</span>
+      <span class="lt-opt" id="lt-en">EN</span>
+    </div>
+    <button class="btn-sm" onclick="goStep(6)">📋</button>
+    <button class="btn-sm" onclick="window.print()">🖨</button>
+    <button class="btn-sm" onclick="clearCache()" title="Borrar caché">🔄</button>
+  </div>
+</header>
+
+<div class="main">
+  <!-- Steps bar -->
+  <div class="steps-bar">
+    <div class="step-tab active" id="tab-1" onclick="goStep(1)"><span class="step-num">1</span><span id="stab1">Config</span></div>
+    <div class="step-tab" id="tab-2" onclick="goStep(2)"><span class="step-num">2</span><span id="stab2">Plan</span></div>
+    <div class="step-tab" id="tab-3" onclick="goStep(3)"><span class="step-num">3</span><span id="stab3">Alumnos</span></div>
+    <div class="step-tab" id="tab-4" onclick="goStep(4)"><span class="step-num">4</span><span id="stab4">Criterios</span></div>
+    <div class="step-tab" id="tab-5" onclick="goStep(5)"><span class="step-num">5</span><span id="stab5">Instrumento</span></div>
+    <div class="step-tab" id="tab-6" onclick="goStep(6)"><span class="step-num">6</span><span id="stab6">Plantillas</span></div>
+  </div>
+
+  <!-- ══ STEP 1: Config ══ -->
+  <div class="panel active" id="panel-1">
+    <div class="card">
+      <div class="card-title"><span class="icon icon-green">⚙️</span><span id="s1title">Configuración</span></div>
+      <div class="field-row three">
+        <div class="field"><label id="lbl-grade">Grado</label>
+          <select id="cfg-grade">
+            <option value="">— Seleccionar —</option>
+            <option>PreK</option><option>Kinder</option>
+            <option>1st Grade</option><option>2nd Grade</option><option>3rd Grade</option>
+            <option>4th Grade</option><option>5th Grade</option><option>6th Grade</option>
+          </select>
+        </div>
+        <div class="field"><label id="lbl-section">Sección</label><input type="text" id="cfg-section" placeholder="Ej: A"/></div>
+        <div class="field"><label id="lbl-date">Fecha</label><input type="date" id="cfg-date"/></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label id="lbl-skill">Skill</label>
+          <select id="cfg-skill">
+            <option value="">— Seleccionar —</option>
+            <option>Listening</option><option>Reading</option>
+            <option>Writing</option><option>Speaking</option><option>Mediation</option>
+          </select>
+        </div>
+        <div class="field"><label id="lbl-activity">Tipo de actividad</label>
+          <input type="text" id="cfg-activity" placeholder="Ej: poesía, charla, maqueta…" list="act-list"/>
+          <datalist id="act-list">
+            <option value="poesía recitada"/><option value="charla expositiva"/><option value="maqueta"/>
+            <option value="proyecto grupal"/><option value="ejercicio oral"/><option value="debate"/>
+            <option value="dictado"/><option value="ensayo escrito"/><option value="juego de roles"/>
+            <option value="experimento"/><option value="entrevista"/><option value="cuento narrado"/>
+          </datalist>
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <p id="lbl-instrtype" style="font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:9px">Tipo de instrumento</p>
+        <div class="type-grid">
+          <div class="type-card selected" data-type="cotejo" onclick="selectType(this)"><div class="ticon">☑️</div><div class="tname" id="tc-cotejo">Lista de cotejo</div><div class="tdesc" id="td-cotejo">Escala 1–4</div></div>
+          <div class="type-card" data-type="rubrica" onclick="selectType(this)"><div class="ticon">📊</div><div class="tname" id="tc-rubrica">Rúbrica analítica</div><div class="tdesc" id="td-rubrica">Descriptores por nivel</div></div>
+          <div class="type-card" data-type="rubrica_unica" onclick="selectType(this)"><div class="ticon">📋</div><div class="tname" id="tc-rubrica_unica">Rúbrica (tabla única)</div><div class="tdesc" id="td-rubrica_unica">Descriptores + registro juntos</div></div>
+          <div class="type-card" data-type="estimacion" onclick="selectType(this)"><div class="ticon">🔘</div><div class="tname" id="tc-estimacion">Escala estimación</div><div class="tdesc" id="td-estimacion">S / AV / N</div></div>
+          <div class="type-card" data-type="anecdotico" onclick="selectType(this)"><div class="ticon">📝</div><div class="tname" id="tc-anecdotico">Reg. anecdótico</div><div class="tdesc" id="td-anecdotico">Observación abierta</div></div>
+          <div class="type-card" data-type="numerica" onclick="selectType(this)"><div class="ticon">🔢</div><div class="tname" id="tc-numerica">Escala numérica</div><div class="tdesc" id="td-numerica">Puntuación 0–100</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="nav-row"><div></div><button class="btn-nav primary" id="btn-next-1" onclick="goStep(2)">Siguiente →</button></div>
+  </div>
+
+  <!-- ══ STEP 2: Plan import ══ -->
+  <div class="panel" id="panel-2">
+    <div class="card">
+      <div class="card-title"><span class="icon icon-purple">📄</span><span id="s2title">Importar planeamiento</span></div>
+      <div class="info-box" id="s2-info">Sube el planeamiento (Word o PDF) — la IA extraerá los learning outcomes del skill seleccionado.</div>
+
+      <div class="upload-zone" id="plan-upload-zone" onclick="document.getElementById('plan-file-input').click()">
+        <input type="file" id="plan-file-input" accept=".docx,.pdf" style="display:none" onchange="handlePlanFile(event)"/>
+        <div class="uz-icon">📂</div>
+        <p><strong id="uz-plan-title">Cargar planeamiento</strong> <span id="uz-plan-sub">Word (.docx) o PDF</span></p>
+        <p id="uz-plan-hint" style="font-size:12px;margin-top:3px;color:var(--ink3)">Toca para seleccionar o arrastra el archivo</p>
+      </div>
+
+      <div id="plan-status" style="margin-top:12px;font-size:13px;color:var(--ink2);display:none"></div>
+
+      <div id="outcomes-section" style="display:none;margin-top:16px">
+        <div class="outcomes-box">
+          <p class="ob-label" id="ob-label">Learning Outcomes extraídos</p>
+          <div id="outcomes-list"></div>
+          <button class="btn-add-outcome" onclick="addOutcome()">+ Agregar outcome</button>
+        </div>
+        <p style="font-size:12px;color:var(--ink3);margin-top:6px" id="outcomes-hint">Desmarca los que no apliquen · edita el texto si es necesario</p>
+      </div>
+
+      <div id="skip-plan-row" style="margin-top:14px">
+        <button class="btn-nav" style="font-size:13px;color:var(--ink3)" onclick="skipPlan()" id="btn-skip-plan">Continuar sin planeamiento →</button>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="btn-nav" onclick="goStep(1)">← Atrás</button>
+      <button class="btn-nav primary" id="btn-next-2" onclick="goStep(3)">Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- ══ STEP 3: Students ══ -->
+  <div class="panel" id="panel-3">
+    <div class="card">
+      <div class="card-title"><span class="icon icon-green">👥</span><span id="s3title">Estudiantes</span></div>
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+        <input type="file" id="file-input" accept=".csv,.txt" style="display:none" onchange="handleCSV(event)"/>
+        <div class="uz-icon">📂</div>
+        <p><strong id="uz-csv-title">Cargar CSV</strong> <span id="uz-csv-sub">con los nombres</span></p>
+        <p id="uz-csv-hint" style="font-size:12px;margin-top:3px;color:var(--ink3)">Un nombre por fila</p>
+      </div>
+      <div class="add-manual" style="margin-top:12px">
+        <div class="field" style="flex:1;margin:0"><input type="text" id="manual-name" placeholder="Agregar manualmente…" onkeydown="if(event.key==='Enter')addManual()"/></div>
+        <button class="btn-nav" style="white-space:nowrap" onclick="addManual()" id="btn-add-st">+ Agregar</button>
+      </div>
+      <div class="student-list" id="student-list"></div>
+      <p style="font-size:12px;color:var(--ink3);margin-top:10px"><strong id="student-count">0</strong> <span id="st-count-label">estudiantes cargados</span></p>
+    </div>
+    <div class="nav-row">
+      <button class="btn-nav" onclick="goStep(2)">← Atrás</button>
+      <button class="btn-nav primary" onclick="goStep(4)">Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- ══ STEP 4: Criteria ══ -->
+  <div class="panel" id="panel-4">
+    <div class="card">
+      <div class="card-title"><span class="icon icon-purple">🤖</span><span id="s4title">Criterios con IA</span></div>
+      <div class="info-box" id="ia-context-box">—</div>
+      <div class="prompt-preview" id="prompt-preview">—</div>
+      <button class="btn-generate" id="btn-gen" onclick="generateCriteria()"><span>✨</span> <span id="btn-gen-label">Generar criterios con IA</span></button>
+      <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:16px">
+        <p style="font-size:13px;font-weight:700;color:var(--ink2);margin-bottom:9px" id="manual-lbl">O ingresa los criterios manualmente:</p>
+        <div class="criteria-list" id="manual-criteria-list"></div>
+        <button class="btn-add-crit" onclick="addManualCriteria()" id="btn-add-crit-main">+ Añadir criterio</button>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="btn-nav" onclick="goStep(3)">← Atrás</button>
+      <button class="btn-nav primary" onclick="buildInstrument()" id="btn-build">Ver instrumento →</button>
+    </div>
+  </div>
+
+  <!-- ══ STEP 5: Instrument ══ -->
+  <div class="panel" id="panel-5">
+    <div class="card" id="instrument-header-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
+        <div><h2 style="font-size:20px;margin-bottom:3px" id="inst-title">Instrumento</h2><p style="font-size:13px;color:var(--ink2)" id="inst-meta"></p></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap" id="inst-legend"></div>
+      </div>
+    </div>
+    <div class="card" id="instrument-body"></div>
+    <div class="export-bar">
+      <button class="btn-export primary" onclick="exportPDF()" id="btn-exp-pdf">📄 PDF</button>
+      <button class="btn-export" onclick="exportWord()" id="btn-exp-word">📝 Word</button>
+      <button class="btn-export" onclick="exportCSV()" id="btn-exp-csv">📊 CSV</button>
+      <button class="btn-export" onclick="saveTemplate()" id="btn-save-tpl">💾 Plantilla</button>
+      <button class="btn-export" onclick="shareLink()" id="btn-share">🔗 Compartir</button>
+    </div>
+    <div class="nav-row">
+      <button class="btn-nav" onclick="goStep(4)" id="btn-back-5">← Criterios</button>
+      <button class="btn-nav" onclick="goStep(1)" id="btn-new">🔄 Nuevo</button>
+    </div>
+  </div>
+
+  <!-- ══ STEP 6: Templates ══ -->
+  <div class="panel" id="panel-6">
+    <div class="card">
+      <div class="card-title"><span class="icon icon-amber">📋</span><span id="s6title">Plantillas guardadas</span></div>
+      <div class="template-list" id="template-list">
+        <div class="empty-state"><div class="es-icon">📂</div><p id="empty-tpl-p">No hay plantillas aún.</p></div>
+      </div>
+    </div>
+    <div class="nav-row"><button class="btn-nav" onclick="goStep(1)" id="btn-back-6">← Inicio</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="loading-overlay" id="loading-overlay" style="display:none">
+  <div class="loading-card">
+    <div class="big-spinner"></div>
+    <p id="loading-msg">Procesando…</p>
+  </div>
+</div>
+
+<script>
+// ── PDF.js worker ──
+if(typeof pdfjsLib !== 'undefined') pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+// ── i18n ──
+const T = {
+  es: {
+    appTitle:'Generador de Instrumentos', appSub:'ESL · Panamá',
+    stab1:'Config', stab2:'Plan', stab3:'Alumnos', stab4:'Criterios', stab5:'Instrumento', stab6:'Plantillas',
+    s1title:'Configuración', s2title:'Importar planeamiento', s3title:'Estudiantes', s4title:'Criterios con IA', s5title:'Instrumento', s6title:'Plantillas guardadas',
+    lblGrade:'Grado', lblSection:'Sección', lblDate:'Fecha', lblSkill:'Skill', lblActivity:'Tipo de actividad', lblInstrType:'Tipo de instrumento',
+    gradeDefault:'— Seleccionar —', skillDefault:'— Seleccionar —',
+    tcCotejo:'Lista de cotejo', tdCotejo:'Escala 1–4',
+    tcRubrica:'Rúbrica analítica', tdRubrica:'Descriptores por nivel',
+    tcRubrica_unica:'Rúbrica (tabla única)', tdRubrica_unica:'Descriptores + registro juntos',
+    tcEstimacion:'Escala estimación', tdEstimacion:'S / AV / N',
+    tcAnecdotico:'Reg. anecdótico', tdAnecdotico:'Observación abierta',
+    tcNumerica:'Escala numérica', tdNumerica:'Puntuación 0–100',
+    s2info:'Sube el planeamiento (Word o PDF) — la IA extraerá los learning outcomes del skill seleccionado.',
+    uzPlanTitle:'Cargar planeamiento', uzPlanSub:'Word (.docx) o PDF',
+    uzPlanHint:'Toca para seleccionar o arrastra el archivo',
+    obLabel:'Learning Outcomes extraídos',
+    outcomesHint:'Desmarca los que no apliquen · edita el texto si es necesario',
+    btnSkipPlan:'Continuar sin planeamiento →',
+    uzCsvTitle:'Cargar CSV', uzCsvSub:'con los nombres', uzCsvHint:'Un nombre por fila',
+    btnAddSt:'+ Agregar', stCountLabel:'estudiantes cargados',
+    manualLbl:'O ingresa los criterios manualmente:',
+    btnGenLabel:'Generar criterios con IA', generating:'Generando…',
+    btnBuild:'Ver instrumento →',
+    btnExpPdf:'📄 PDF', btnExpCsv:'📊 CSV', btnSaveTpl:'💾 Plantilla', btnShare:'🔗 Compartir',
+    btnBack5:'← Criterios', btnNew:'🔄 Nuevo', btnBack6:'← Inicio',
+    emptyTpl:'No hay plantillas aún.',
+    colStudent:'Estudiante', colAvg:'Prom.', colTotal:'Total', colObs:'Observaciones',
+    rubDesc:'Parte 1 — Descriptores', rubReg:'Parte 2 — Registro de evaluación',
+    rubDef:'Deficiente', rubReg2:'Regular', rubSat:'Satisfactorio', rubBue:'Bueno',
+    rubD:'D', rubR:'R', rubS:'S', rubB:'B',
+    estSFull:'Siempre', estAFull:'A veces', estNFull:'Nunca',
+    estS:'S', estA:'AV', estN:'N',
+    l1:'1 No logrado', l2:'2 En proceso', l3:'3 Logrado', l4:'4 Excelente',
+    criterionLabel:'Criterio', addCriterion:'+ Añadir criterio',
+    savedOn:'Guardada el', criteriaCount:'criterios',
+    genOK:'✅ Criterios generados', genErr:'⚠️ Error IA — ingresa criterios manualmente',
+    extractOK:'✅ Outcomes extraídos del planeamiento', extractErr:'⚠️ No se pudo extraer — agrega outcomes manualmente',
+    csvToast:'📊 CSV descargado', printToast:'🖨 Selecciona Guardar como PDF',
+    saveToast:'💾 Plantilla guardada', deleteToast:'🗑 Plantilla eliminada',
+    loadToast:'📋 Plantilla cargada', shareToast:'🔗 Enlace copiado',
+    errNoCrit:'Agrega al menos un criterio', errNoSt:'Agrega al menos un estudiante',
+    loadingExtract:'Extrayendo outcomes del planeamiento…',
+    loadingCriteria:'Generando criterios con IA…',
+    promptSystem: `Eres un experto en evaluación educativa para ESL en Panamá (currículo MEDUCA, enfoque AOA).
+Genera exactamente 5 criterios de evaluación basados en los siguientes learning outcomes del planeamiento:
+
+SKILL: {skill}
+GRADO: {grade} {section}
+TIPO DE ACTIVIDAD: {activity}
+TIPO DE INSTRUMENTO: {type}
+LEARNING OUTCOMES:
+{outcomes}
+
+{desc}
+
+Responde SOLO en JSON sin markdown:
+{"criterios":["criterio 1","criterio 2","criterio 3","criterio 4","criterio 5"]}
+
+Los criterios deben ser concretos, observables, alineados a los outcomes del planeamiento y apropiados para el grado. En español.`,
+    promptRubrica: `Eres un experto en evaluación educativa para ESL en Panamá (currículo MEDUCA, enfoque AOA).
+Genera exactamente 4 criterios con descriptores por nivel basados en los learning outcomes:
+
+SKILL: {skill}
+GRADO: {grade} {section}
+TIPO DE ACTIVIDAD: {activity}
+LEARNING OUTCOMES:
+{outcomes}
+
+{desc}
+
+Responde SOLO en JSON sin markdown:
+{"criterios":[{"nombre":"criterio","d1":"Deficiente","d2":"Regular","d3":"Satisfactorio","d4":"Bueno"}]}
+
+IMPORTANTE: Todos los descriptores deben estar redactados en positivo — describen LO QUE EL ESTUDIANTE HACE o logra en cada nivel, nunca en negativo (evita "no logra", "no puede", "no demuestra", "carece de", "falla en", etc.). Incluso el nivel 1 (Deficiente) debe describir el intento o desempeño mínimo observable. En español.`,
+    promptExtract: `Eres un asistente educativo. Extrae los learning outcomes o indicadores de logro del skill "{skill}" del siguiente planeamiento educativo de Panamá.
+
+PLANEAMIENTO:
+{text}
+
+Responde SOLO en JSON sin markdown:
+{"outcomes":["outcome 1","outcome 2","outcome 3"]}
+
+Extrae solo los outcomes del skill indicado. Máximo 8 outcomes. Si no encuentras outcomes específicos del skill, extrae los más relevantes del documento.`,
+    contextPfx:'- Contexto adicional: ',
+    noOutcomesNote:'(Sin outcomes del planeamiento — criterios generales)',
+    typeCotejo:'Lista de cotejo (escala 1–4)', typeRubrica:'Rúbrica analítica',
+    typeRubricaUnica:'Rúbrica (tabla única)',
+    typeEstimacion:'Escala de estimación', typeAnecdotico:'Registro anecdótico', typeNumerica:'Escala numérica',
+  },
+  en: {
+    appTitle:'Assessment Generator', appSub:'ESL · Panama',
+    stab1:'Setup', stab2:'Plan', stab3:'Students', stab4:'Criteria', stab5:'Instrument', stab6:'Templates',
+    s1title:'Configuration', s2title:'Import lesson plan', s3title:'Students', s4title:'AI Criteria', s5title:'Instrument', s6title:'Saved templates',
+    lblGrade:'Grade', lblSection:'Section', lblDate:'Date', lblSkill:'Skill', lblActivity:'Activity type', lblInstrType:'Instrument type',
+    gradeDefault:'— Select —', skillDefault:'— Select —',
+    tcCotejo:'Checklist', tdCotejo:'Scale 1–4',
+    tcRubrica:'Analytic rubric', tdRubrica:'Descriptors per level',
+    tcRubrica_unica:'Rubric (single table)', tdRubrica_unica:'Descriptors + record combined',
+    tcEstimacion:'Rating scale', tdEstimacion:'A / S / N',
+    tcAnecdotico:'Anecdotal record', tdAnecdotico:'Open observation',
+    tcNumerica:'Numeric scale', tdNumerica:'Score 0–100',
+    s2info:'Upload the lesson plan (Word or PDF) — the AI will extract the learning outcomes for the selected skill.',
+    uzPlanTitle:'Upload plan', uzPlanSub:'Word (.docx) or PDF',
+    uzPlanHint:'Tap to select or drag the file',
+    obLabel:'Extracted Learning Outcomes',
+    outcomesHint:'Uncheck inapplicable ones · edit text if needed',
+    btnSkipPlan:'Continue without plan →',
+    uzCsvTitle:'Upload CSV', uzCsvSub:'with student names', uzCsvHint:'One name per row',
+    btnAddSt:'+ Add', stCountLabel:'students loaded',
+    manualLbl:'Or enter criteria manually:',
+    btnGenLabel:'Generate criteria with AI', generating:'Generating…',
+    btnBuild:'View instrument →',
+    btnExpPdf:'📄 PDF', btnExpCsv:'📊 CSV', btnSaveTpl:'💾 Template', btnShare:'🔗 Share',
+    btnBack5:'← Criteria', btnNew:'🔄 New', btnBack6:'← Start',
+    emptyTpl:'No templates yet.',
+    colStudent:'Student', colAvg:'Avg.', colTotal:'Total', colObs:'Observations',
+    rubDesc:'Part 1 — Descriptors', rubReg:'Part 2 — Assessment record',
+    rubDef:'Poor', rubReg2:'Fair', rubSat:'Good', rubBue:'Excellent',
+    rubD:'P', rubR:'F', rubS:'G', rubB:'E',
+    estSFull:'Always', estAFull:'Sometimes', estNFull:'Never',
+    estS:'A', estA:'S', estN:'N',
+    l1:'1 Not achieved', l2:'2 In progress', l3:'3 Achieved', l4:'4 Excellent',
+    criterionLabel:'Criterion', addCriterion:'+ Add criterion',
+    savedOn:'Saved on', criteriaCount:'criteria',
+    genOK:'✅ Criteria generated', genErr:'⚠️ AI error — enter criteria manually',
+    extractOK:'✅ Outcomes extracted from plan', extractErr:'⚠️ Could not extract — add outcomes manually',
+    csvToast:'📊 CSV downloaded', printToast:'🖨 Select Save as PDF',
+    saveToast:'💾 Template saved', deleteToast:'🗑 Template deleted',
+    loadToast:'📋 Template loaded', shareToast:'🔗 Link copied',
+    errNoCrit:'Add at least one criterion', errNoSt:'Add at least one student',
+    loadingExtract:'Extracting outcomes from plan…',
+    loadingCriteria:'Generating criteria with AI…',
+    promptSystem: `You are an educational assessment expert for ESL in Panama (MEDUCA curriculum, AOA approach).
+Generate exactly 5 assessment criteria based on the following learning outcomes from the lesson plan:
+
+SKILL: {skill}
+GRADE: {grade} {section}
+ACTIVITY TYPE: {activity}
+INSTRUMENT TYPE: {type}
+LEARNING OUTCOMES:
+{outcomes}
+
+{desc}
+
+Respond ONLY in JSON without markdown:
+{"criterios":["criterion 1","criterion 2","criterion 3","criterion 4","criterion 5"]}
+
+Criteria must be concrete, observable, aligned to the plan outcomes and appropriate for the grade level. In English.`,
+    promptRubrica: `You are an educational assessment expert for ESL in Panama (MEDUCA curriculum, AOA approach).
+Generate exactly 4 criteria with descriptors per level based on the learning outcomes:
+
+SKILL: {skill}
+GRADE: {grade} {section}
+ACTIVITY TYPE: {activity}
+LEARNING OUTCOMES:
+{outcomes}
+
+{desc}
+
+Respond ONLY in JSON without markdown:
+{"criterios":[{"nombre":"criterion","d1":"Poor","d2":"Fair","d3":"Good","d4":"Excellent"}]}
+
+IMPORTANT: All descriptors must be written in positive language — they describe WHAT THE STUDENT DOES or achieves at each level, never in negative terms (avoid "does not", "cannot", "fails to", "lacks", "is unable to", etc.). Even level 1 (Poor) must describe the minimum observable attempt or performance. In English.`,
+    promptExtract: `You are an educational assistant. Extract the learning outcomes or achievement indicators for the skill "{skill}" from the following Panama educational lesson plan.
+
+LESSON PLAN:
+{text}
+
+Respond ONLY in JSON without markdown:
+{"outcomes":["outcome 1","outcome 2","outcome 3"]}
+
+Extract only outcomes for the indicated skill. Maximum 8 outcomes.`,
+    contextPfx:'- Additional context: ',
+    noOutcomesNote:'(No plan outcomes — general criteria)',
+    typeCotejo:'Checklist (scale 1–4)', typeRubrica:'Analytic rubric',
+    typeRubricaUnica:'Rubric (single table)',
+    typeEstimacion:'Rating scale', typeAnecdotico:'Anecdotal record', typeNumerica:'Numeric scale',
+  }
+};
+
+let lang = localStorage.getItem('instr_lang2') || 'es';
+function t(k){ return T[lang][k] || T.es[k] || k; }
+function toggleLang(){ lang = lang==='es'?'en':'es'; localStorage.setItem('instr_lang2',lang); applyLang(); }
+
+function applyLang(){
+  const isEN = lang==='en';
+  document.getElementById('lt-es').classList.toggle('active',!isEN);
+  document.getElementById('lt-en').classList.toggle('active',isEN);
+  document.getElementById('app-h1').childNodes[0].textContent = t('appTitle')+' ';
+  document.getElementById('app-sub').textContent = t('appSub');
+  ['1','2','3','4','5','6'].forEach((n,i)=>{ const el=document.getElementById('stab'+n); if(el) el.textContent=t('stab'+n); });
+  ['s1title','s2title','s3title','s4title','s6title'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent=t(id); });
+  setTxt('lbl-grade','lblGrade'); setTxt('lbl-section','lblSection'); setTxt('lbl-date','lblDate');
+  setTxt('lbl-skill','lblSkill'); setTxt('lbl-activity','lblActivity'); setTxt('lbl-instrtype','lblInstrType');
+  setPh('cfg-section','Ej: A');
+  const gr=document.getElementById('cfg-grade'); if(gr) gr.options[0].text=t('gradeDefault');
+  const sk=document.getElementById('cfg-skill'); if(sk) sk.options[0].text=t('skillDefault');
+  ['cotejo','rubrica','rubrica_unica','estimacion','anecdotico','numerica'].forEach(tp=>{
+    setTxt('tc-'+tp,'tc'+tp.charAt(0).toUpperCase()+tp.slice(1));
+    setTxt('td-'+tp,'td'+tp.charAt(0).toUpperCase()+tp.slice(1));
+  });
+  setTxt('s2-info','s2info'); setTxt('uz-plan-title','uzPlanTitle'); setTxt('uz-plan-sub','uzPlanSub'); setTxt('uz-plan-hint','uzPlanHint');
+  setTxt('ob-label','obLabel'); setTxt('outcomes-hint','outcomesHint'); setTxt('btn-skip-plan','btnSkipPlan');
+  setTxt('uz-csv-title','uzCsvTitle'); setTxt('uz-csv-sub','uzCsvSub'); setTxt('uz-csv-hint','uzCsvHint');
+  setTxt('btn-add-st','btnAddSt'); setTxt('st-count-label','stCountLabel');
+  setTxt('manual-lbl','manualLbl'); setTxt('btn-gen-label','btnGenLabel'); setTxt('btn-build','btnBuild');
+  setTxt('btn-exp-pdf','btnExpPdf'); setTxt('btn-exp-csv','btnExpCsv'); setTxt('btn-save-tpl','btnSaveTpl'); setTxt('btn-share','btnShare');
+  setTxt('btn-back-5','btnBack5'); setTxt('btn-new','btnNew'); setTxt('btn-back-6','btnBack6');
+  const ep=document.getElementById('empty-tpl-p'); if(ep) ep.textContent=t('emptyTpl');
+  setPh('manual-name', isEN?'Add student manually…':'Agregar manualmente…');
+  if(currentStep===4) prepareIAPanel();
+}
+function setTxt(id,key){ const el=document.getElementById(id); if(el) el.textContent=t(key); }
+function setPh(id,val){ const el=document.getElementById(id); if(el) el.placeholder=val; }
+
+// ── State ──
+const state = {
+  grade:'', section:'', date:'', skill:'', activity:'',
+  type:'cotejo', students:[], criteria:[], rubricaCriteria:null,
+  outcomes:[], planText:'', scores:{},
+};
+const PROXY = '/api/groq';
+
+// ── Navigation ──
+let currentStep=1;
+function goStep(n){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.step-tab').forEach(t=>t.classList.remove('active','done'));
+  document.getElementById('panel-'+n).classList.add('active');
+  document.getElementById('tab-'+n).classList.add('active');
+  for(let i=1;i<n;i++) document.getElementById('tab-'+i).classList.add('done');
+  currentStep=n;
+  if(n===4) prepareIAPanel();
+  if(n===6) renderTemplates();
+}
+function skipPlan(){ goStep(3); }
+
+// ── Type selector ──
+function selectType(el){ document.querySelectorAll('.type-card').forEach(c=>c.classList.remove('selected')); el.classList.add('selected'); state.type=el.dataset.type; }
+
+// ── Plan file import ──
+async function handlePlanFile(e){
+  const file=e.target.files[0]; if(!file) return;
+  const ext=file.name.split('.').pop().toLowerCase();
+  showLoading(t('loadingExtract'));
+  try {
+    let text='';
+    if(ext==='docx'){
+      const buf=await file.arrayBuffer();
+      const result=await mammoth.extractRawText({arrayBuffer:buf});
+      text=result.value;
+    } else if(ext==='pdf'){
+      const buf=await file.arrayBuffer();
+      const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+      for(let i=1;i<=Math.min(pdf.numPages,15);i++){
+        const page=await pdf.getPage(i);
+        const tc=await page.getTextContent();
+        text+=tc.items.map(it=>it.str).join(' ')+'\n';
+      }
+    }
+    state.planText=text;
+    document.getElementById('plan-status').style.display='block';
+    document.getElementById('plan-status').textContent='📄 '+file.name+' — cargado';
+    await extractOutcomes(text);
+  } catch(err){
+    hideLoading();
+    showToast(t('extractErr'));
+  }
+}
+
+async function extractOutcomes(text){
+  syncState();
+  const skill=state.skill||'';
+  const prompt=`You are an educational assistant. Extract the learning outcomes or achievement indicators for the skill "${skill}" from the following lesson plan.
+
+LESSON PLAN:
+${text.slice(0,6000)}
+
+Respond ONLY in JSON without markdown:
+{"outcomes":["outcome 1","outcome 2","outcome 3"]}
+
+IMPORTANT: Extract the outcomes EXACTLY as they appear in the document. Do NOT translate. Keep the original language of the document. Maximum 8 outcomes.`;
+  const model=document.getElementById('model-select').value;
+  try {
+    const res=await fetch(PROXY,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({messages:[{role:'user',content:prompt}],model,stream:true})});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const fullText=await readStream(res);
+    const clean=fullText.replace(/```json|```/g,'').trim();
+    const parsed=JSON.parse(clean);
+    state.outcomes=parsed.outcomes||[];
+    renderOutcomes();
+    document.getElementById('outcomes-section').style.display='block';
+    showToast(t('extractOK'));
+  } catch(err){
+    state.outcomes=[];
+    document.getElementById('outcomes-section').style.display='block';
+    renderOutcomes();
+    showToast(t('extractErr'));
+  }
+  hideLoading();
+}
+
+function renderOutcomes(){
+  const list=document.getElementById('outcomes-list');
+  if(!state.outcomes.length) state.outcomes=[''];
+  list.innerHTML=state.outcomes.map((o,i)=>`
+    <div class="outcome-item">
+      <input type="checkbox" checked id="oc-${i}" onchange="syncOutcomes()"/>
+      <textarea rows="2" oninput="state.outcomes[${i}]=this.value;syncOutcomes()">${escH(o)}</textarea>
+      <button class="oi-del" onclick="removeOutcome(${i})">×</button>
+    </div>`).join('');
+}
+
+function syncOutcomes(){
+  state.outcomes=Array.from(document.querySelectorAll('#outcomes-list .outcome-item')).map((item,i)=>{
+    const cb=item.querySelector('input[type=checkbox]');
+    const ta=item.querySelector('textarea');
+    return cb&&cb.checked ? ta.value.trim() : null;
+  }).filter(Boolean);
+}
+
+function addOutcome(){ state.outcomes.push(''); renderOutcomes(); }
+function removeOutcome(i){ state.outcomes.splice(i,1); renderOutcomes(); }
+
+// ── CSV ──
+const uploadZone=document.getElementById('upload-zone');
+uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.classList.add('drag');});
+uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('drag'));
+uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.classList.remove('drag');handleCSV({target:{files:e.dataTransfer.files}});});
+
+function handleCSV(e){
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const lines=ev.target.result.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    lines.forEach(name=>{if(!state.students.includes(name)) state.students.push(name);});
+    renderStudents();
+  };
+  reader.readAsText(file);
+}
+
+function addManual(){
+  const inp=document.getElementById('manual-name');
+  const val=inp.value.trim(); if(!val) return;
+  if(!state.students.includes(val)) state.students.push(val);
+  inp.value=''; renderStudents();
+}
+
+function removeStudent(i){ state.students.splice(i,1); renderStudents(); }
+
+function renderStudents(){
+  document.getElementById('student-list').innerHTML=state.students.map((s,i)=>
+    `<div class="student-chip">${escH(s)}<button onclick="removeStudent(${i})">×</button></div>`).join('');
+  document.getElementById('student-count').textContent=state.students.length;
+}
+
+// ── Step 4: IA Panel ──
+function prepareIAPanel(){
+  syncState();
+  const outcomesText=state.outcomes.length ? state.outcomes.map((o,i)=>`${i+1}. ${o}`).join('\n') : t('noOutcomesNote');
+  document.getElementById('ia-context-box').textContent=
+    `${t('lblGrade')}: ${state.grade||'—'} | Skill: ${state.skill||'—'} | ${t('lblActivity')}: ${state.activity||'—'} | Outcomes: ${state.outcomes.length}`;
+  document.getElementById('prompt-preview').textContent=buildPrompt(outcomesText);
+  renderManualCriteria();
+}
+
+function typeLabel(tp){
+  return {cotejo:t('typeCotejo'),rubrica:t('typeRubrica'),rubrica_unica:t('typeRubricaUnica'),estimacion:t('typeEstimacion'),anecdotico:t('typeAnecdotico'),numerica:t('typeNumerica')}[tp]||tp;
+}
+
+function buildPrompt(outcomesText){
+  syncOutcomes&&syncOutcomes();
+  const outs=outcomesText||(state.outcomes.length?state.outcomes.map((o,i)=>`${i+1}. ${o}`).join('\n'):t('noOutcomesNote'));
+  const tpl=(state.type==='rubrica'||state.type==='rubrica_unica')?t('promptRubrica'):t('promptSystem');
+  return tpl
+    .replace('{grade}',state.grade).replace('{section}',state.section)
+    .replace('{skill}',state.skill).replace('{activity}',state.activity)
+    .replace('{type}',typeLabel(state.type)).replace('{outcomes}',outs)
+    .replace('{desc}','');
+}
+
+async function generateCriteria(){
+  syncState(); syncOutcomes();
+  const btn=document.getElementById('btn-gen');
+  btn.disabled=true;
+  document.getElementById('btn-gen-label').textContent=t('generating');
+  btn.querySelector('span').innerHTML='<div class="spinner"></div>';
+  showLoading(t('loadingCriteria'));
+  try {
+    const model=document.getElementById('model-select').value;
+    const res=await fetch(PROXY,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({messages:[{role:'user',content:buildPrompt()}],model,stream:true,response_format:{type:'json_object'}})});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const fullText=await readStream(res);
+    const clean=fullText.replace(/```json|```/g,'').trim();
+    const parsed=JSON.parse(clean);
+    if((state.type==='rubrica'||state.type==='rubrica_unica')&&parsed.criterios?.[0]?.nombre){
+      state.rubricaCriteria=parsed.criterios;
+      state.criteria=parsed.criterios.map(c=>c.nombre);
+    } else {
+      state.criteria=parsed.criterios||[];
+      state.rubricaCriteria=null;
+    }
+    renderManualCriteria();
+    showToast(t('genOK'));
+  } catch(err){ showToast(t('genErr')); }
+  hideLoading();
+  btn.disabled=false;
+  document.getElementById('btn-gen-label').textContent=t('btnGenLabel');
+  btn.querySelector('span').textContent='✨';
+}
+
+function renderManualCriteria(){
+  const list=document.getElementById('manual-criteria-list');
+  if(!state.criteria.length) state.criteria=['','',''];
+  list.innerHTML=state.criteria.map((c,i)=>`
+    <div class="criteria-item">
+      <span class="ci-num">${i+1}</span>
+      <input type="text" value="${escH(c)}" placeholder="${t('criterionLabel')} ${i+1}…" oninput="state.criteria[${i}]=this.value"/>
+      <button class="ci-del" onclick="removeCriteria(${i})">×</button>
+    </div>`).join('');
+}
+
+function addManualCriteria(){ state.criteria.push(''); renderManualCriteria(); }
+function removeCriteria(i){ state.criteria.splice(i,1); renderManualCriteria(); }
+
+// ── Build instrument ──
+function buildInstrument(){
+  syncCriteria();
+  const crits=state.criteria.filter(Boolean);
+  if(!crits.length){ showToast(t('errNoCrit')); return; }
+  if(!state.students.length){ showToast(t('errNoSt')); return; }
+  state.criteria=crits;
+
+  document.getElementById('inst-title').textContent=typeLabel(state.type);
+  document.getElementById('inst-meta').textContent=[state.grade,state.section,state.skill,state.activity,state.date].filter(Boolean).join(' · ');
+
+  const legend=document.getElementById('inst-legend');
+  if(state.type==='cotejo'){
+    legend.innerHTML=`<span class="badge badge-red">${t('l1')}</span><span class="badge badge-amber">${t('l2')}</span><span class="badge badge-blue">${t('l3')}</span><span class="badge badge-green">${t('l4')}</span>`;
+  } else if(state.type==='estimacion'){
+    legend.innerHTML=`<span class="badge badge-green">${t('estSFull')}</span><span class="badge badge-amber">${t('estAFull')}</span><span class="badge badge-red">${t('estNFull')}</span>`;
+  } else { legend.innerHTML=''; }
+
+  const body=document.getElementById('instrument-body');
+  if(state.type==='cotejo') body.innerHTML=buildCotejo();
+  else if(state.type==='rubrica') body.innerHTML=buildRubrica();
+  else if(state.type==='rubrica_unica') body.innerHTML=buildRubricaUnica();
+  else if(state.type==='estimacion') body.innerHTML=buildEstimacion();
+  else if(state.type==='anecdotico') body.innerHTML=buildAnecdotico();
+  else if(state.type==='numerica') body.innerHTML=buildNumerica();
+  goStep(5);
+}
+
+function buildCotejo(){
+  const crits=state.criteria;
+  let h=`<div class="score-table-wrap"><table class="score-table"><thead><tr><th class="name-th">${t('colStudent')}</th>`;
+  crits.forEach(c=>{h+=`<th style="min-width:100px;font-size:11px">${escH(c)}</th>`;});
+  h+=`<th>${t('colAvg')}</th></tr></thead><tbody>`;
+  state.students.forEach((s,si)=>{
+    h+=`<tr><td class="name-td">${escH(s)}</td>`;
+    crits.forEach((_,ci)=>{
+      const k=`${si}-${ci}`,v=state.scores[k]||0;
+      h+=`<td><div class="score-btns">`;
+      [1,2,3,4].forEach(n=>{h+=`<button class="sc s${n}${v===n?' on':''}" onclick="setScore(${si},${ci},${n})">${n}</button>`;});
+      h+=`</div></td>`;
+    });
+    h+=`<td class="avg-td" id="avg-${si}">—</td></tr>`;
+  });
+  h+=`</tbody></table></div>`;
+  setTimeout(()=>state.students.forEach((_,si)=>updateAvg(si)),0);
+  return h;
+}
+
+function setScore(si,ci,val){
+  const k=`${si}-${ci}`;
+  state.scores[k]=state.scores[k]===val?0:val;
+  const row=document.querySelectorAll('#panel-5 .score-table tbody tr')[si];
+  row.querySelectorAll('td')[ci+1].querySelectorAll('.sc').forEach((b,idx)=>{
+    b.classList.toggle('on',(state.scores[k]||0)===idx+1);
+  });
+  updateAvg(si);
+}
+
+function updateAvg(si){
+  const vals=state.criteria.map((_,ci)=>state.scores[`${si}-${ci}`]||0).filter(v=>v>0);
+  const avg=vals.length?(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1):'—';
+  const el=document.getElementById('avg-'+si); if(el) el.textContent=avg;
+}
+
+function buildRubrica(){
+  const crits=state.rubricaCriteria||state.criteria.map(n=>({nombre:n,d1:'',d2:'',d3:'',d4:''}));
+  const lvls=[{key:'d1',label:t('rubDef'),abbr:t('rubD'),cls:'d1'},{key:'d2',label:t('rubReg2'),abbr:t('rubR'),cls:'d2'},{key:'d3',label:t('rubSat'),abbr:t('rubS'),cls:'d3'},{key:'d4',label:t('rubBue'),abbr:t('rubB'),cls:'d4'}];
+  let h=`<p class="sec-label">${t('rubDesc')}</p><div class="rub-ms-wrap"><table class="rub-desc-table"><thead><tr><th>${t('criterionLabel')}</th><th>1—${t('rubDef')}</th><th>2—${t('rubReg2')}</th><th>3—${t('rubSat')}</th><th>4—${t('rubBue')}</th></tr></thead><tbody>`;
+  crits.forEach((c,ci)=>{
+    h+=`<tr><td>${escH(c.nombre)}</td>`;
+    lvls.forEach(lv=>{const k=`rdesc-${ci}-${lv.key}`,v=state.scores[k]||c[lv.key]||'';h+=`<td class="${lv.cls}"><textarea style="width:100%;border:none;background:transparent;font-size:11px;resize:none;min-height:50px;outline:none;font-family:inherit" placeholder="…" oninput="state.scores['${k}']=this.value">${escH(v)}</textarea></td>`;});
+    h+=`</tr>`;
+  });
+  h+=`</tbody></table></div>`;
+  h+=`<p class="sec-label" style="margin-top:18px">${t('rubReg')}</p><div class="rub-ms-wrap"><table class="rub-reg-table"><thead><tr><th class="name-th" rowspan="2">${t('colStudent')}</th>`;
+  crits.forEach((c,ci)=>{if(ci>0)h+=`<th class="sep-col" rowspan="2"></th>`;h+=`<th colspan="4" style="font-size:10px">${escH(c.nombre)}</th>`;});
+  h+=`<th rowspan="2">${t('colTotal')}</th></tr><tr>`;
+  crits.forEach((_,ci)=>{lvls.forEach(lv=>{h+=`<th style="width:24px">${lv.abbr}<br/><span style="font-size:8px;opacity:.7">${lvls.indexOf(lv)+1}</span></th>`;});});
+  h+=`</tr></thead><tbody>`;
+  state.students.forEach((s,si)=>{
+    h+=`<tr><td class="name-td">${escH(s)}</td>`;
+    let total=0,allMarked=true;
+    crits.forEach((c,ci)=>{
+      if(ci>0)h+=`<td class="sep-col"></td>`;
+      const mk=state.scores[`rm-${si}-${ci}`]||0;
+      if(mk>0)total+=mk;else allMarked=false;
+      lvls.forEach((_,lvi)=>{const isOn=mk===(lvi+1);h+=`<td><button class="x-mark${isOn?' on':''}" onclick="setRubMark(${si},${ci},${lvi+1})">${isOn?'X':''}</button></td>`;});
+    });
+    h+=`<td class="total-td">${allMarked?total:'—'}</td></tr>`;
+  });
+  h+=`</tbody></table></div>`;
+  return h;
+}
+
+function setRubMark(si,ci,lv){ const k=`rm-${si}-${ci}`; state.scores[k]=state.scores[k]===lv?0:lv; document.getElementById('instrument-body').innerHTML=buildRubrica(); }
+
+function buildRubricaUnica(){
+  const crits=state.rubricaCriteria||state.criteria.map(n=>({nombre:n,d1:'',d2:'',d3:'',d4:''}));
+  const lvls=[{key:'d1',label:t('rubDef'),cls:'d1'},{key:'d2',label:t('rubReg2'),cls:'d2'},{key:'d3',label:t('rubSat'),cls:'d3'},{key:'d4',label:t('rubBue'),cls:'d4'}];
+
+  let h=`<div class="rub-ms-wrap"><table class="rub-unica-table"><thead>`;
+
+  // Row 1: criterion name spanning its 4 level columns
+  h+=`<tr><th class="name-th"></th>`;
+  crits.forEach((c,ci)=>{ if(ci>0) h+=`<th class="sep-col"></th>`; h+=`<th colspan="4">${escH(c.nombre)}</th>`; });
+  h+=`<th>${t('colTotal')}</th></tr>`;
+
+  // Row 2: level labels
+  h+=`<tr><th class="name-th">${t('colStudent')}</th>`;
+  crits.forEach((c,ci)=>{ if(ci>0) h+=`<th class="sep-col"></th>`; lvls.forEach(lv=>{ h+=`<th>${lv.label}</th>`; }); });
+  h+=`<th></th></tr>`;
+
+  // Row 3: level numbers
+  h+=`<tr><th class="name-th"></th>`;
+  crits.forEach((c,ci)=>{ if(ci>0) h+=`<th class="sep-col"></th>`; [1,2,3,4].forEach(n=>{ h+=`<th>${n}</th>`; }); });
+  h+=`<th></th></tr></thead><tbody>`;
+
+  // Row 4: editable descriptor text — read-only reference row, integrated into the same table
+  h+=`<tr class="rub-unica-desc-row"><td class="name-td"><em>${t('rubDesc')}</em></td>`;
+  crits.forEach((c,ci)=>{
+    if(ci>0) h+=`<td class="sep-col"></td>`;
+    lvls.forEach(lv=>{
+      const k=`rdesc-${ci}-${lv.key}`, v=state.scores[k]||c[lv.key]||'';
+      h+=`<td class="${lv.cls}"><textarea oninput="state.scores['${k}']=this.value" placeholder="…">${escH(v)}</textarea></td>`;
+    });
+  });
+  h+=`<td></td></tr>`;
+
+  // Student rows
+  state.students.forEach((s,si)=>{
+    h+=`<tr><td class="name-td">${escH(s)}</td>`;
+    let total=0, allMarked=true;
+    crits.forEach((c,ci)=>{
+      if(ci>0) h+=`<td class="sep-col"></td>`;
+      const mk=state.scores[`ru-${si}-${ci}`]||0;
+      if(mk>0) total+=mk; else allMarked=false;
+      lvls.forEach((_,lvi)=>{
+        const isOn=mk===(lvi+1);
+        h+=`<td><button class="x-mark${isOn?' on':''}" onclick="setRubUnicaMark(${si},${ci},${lvi+1})">${isOn?'X':''}</button></td>`;
+      });
+    });
+    h+=`<td class="total-td">${allMarked?total:'—'}</td></tr>`;
+  });
+
+  h+=`</tbody></table></div>`;
+  return h;
+}
+
+function setRubUnicaMark(si,ci,lv){
+  const k=`ru-${si}-${ci}`;
+  state.scores[k]=state.scores[k]===lv?0:lv;
+  document.getElementById('instrument-body').innerHTML=buildRubricaUnica();
+}
+
+function buildEstimacion(){
+  const opts=[{label:t('estSFull'),abbr:t('estS'),cls:'e0'},{label:t('estAFull'),abbr:t('estA'),cls:'e1'},{label:t('estNFull'),abbr:t('estN'),cls:'e2'}];
+  let h=`<div class="rub-ms-wrap"><table class="est-ms-table"><thead><tr><th class="name-th" rowspan="2">${t('colStudent')}</th>`;
+  state.criteria.forEach((c,ci)=>{if(ci>0)h+=`<th class="sep-col" rowspan="2"></th>`;h+=`<th colspan="3" style="font-size:10px">${escH(c)}</th>`;});
+  h+=`</tr><tr>`;
+  state.criteria.forEach(()=>{opts.forEach(o=>{h+=`<th style="width:26px">${o.abbr}</th>`;});});
+  h+=`</tr></thead><tbody>`;
+  state.students.forEach((s,si)=>{
+    h+=`<tr><td class="name-td">${escH(s)}</td>`;
+    state.criteria.forEach((_,ci)=>{
+      if(ci>0)h+=`<td class="sep-col"></td>`;
+      const mk=state.scores[`em-${si}-${ci}`]||0;
+      opts.forEach((o,oi)=>{const isOn=mk===(oi+1);h+=`<td><button class="ex-btn ${o.cls}${isOn?' on':''}" onclick="setEstMark(${si},${ci},${oi+1})">${isOn?'X':''}</button></td>`;});
+    });
+    h+=`</tr>`;
+  });
+  h+=`</tbody></table></div>`;
+  return h;
+}
+
+function setEstMark(si,ci,val){ const k=`em-${si}-${ci}`; state.scores[k]=state.scores[k]===val?0:val; document.getElementById('instrument-body').innerHTML=buildEstimacion(); }
+
+function buildAnecdotico(){
+  let h=`<table class="anec-table"><thead><tr><th style="width:140px">${t('colStudent')}</th><th>${t('colObs')}</th></tr></thead><tbody>`;
+  state.students.forEach((s,si)=>{const k=`anec-${si}`,v=state.scores[k]||'';h+=`<tr><td class="name-cell">${escH(s)}</td><td><textarea placeholder="…" oninput="state.scores['${k}']=this.value">${escH(v)}</textarea></td></tr>`;});
+  return h+`</tbody></table>`;
+}
+
+function buildNumerica(){
+  let h=`<div class="score-table-wrap"><table class="score-table"><thead><tr><th class="name-th">${t('colStudent')}</th>`;
+  state.criteria.forEach(c=>{h+=`<th style="min-width:80px;font-size:11px">${escH(c)}</th>`;});
+  h+=`<th style="min-width:50px">${t('colTotal')}</th></tr></thead><tbody>`;
+  state.students.forEach((s,si)=>{
+    h+=`<tr><td class="name-td">${escH(s)}</td>`;
+    state.criteria.forEach((_,ci)=>{const k=`num-${si}-${ci}`,v=state.scores[k]||'';h+=`<td><input type="number" class="num-input" min="0" max="100" value="${v}" placeholder="—" oninput="state.scores['${k}']=this.value;updateTotal(${si})"/></td>`;});
+    h+=`<td class="avg-td" id="total-${si}">—</td></tr>`;
+  });
+  h+=`</tbody></table></div>`;
+  setTimeout(()=>state.students.forEach((_,si)=>updateTotal(si)),0);
+  return h;
+}
+
+function updateTotal(si){ const vals=state.criteria.map((_,ci)=>parseFloat(state.scores[`num-${si}-${ci}`])||0); const el=document.getElementById('total-'+si); if(el) el.textContent=vals.reduce((a,b)=>a+b,0).toFixed(0); }
+
+// ── Exports ──
+function exportPDF(){ window.print(); showToast(t('printToast')); }
+
+async function exportWord(){
+  if(typeof docx === 'undefined'){ showToast('⚠️ Librería Word no cargada — recarga la página'); return; }
+  const { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, WidthType, AlignmentType, BorderStyle, HeadingLevel, PageOrientation } = docx;
+
+  const border = { style: BorderStyle.SINGLE, size: 8, color: '000000' };
+  const cellBorders = { top: border, bottom: border, left: border, right: border };
+  const noBorder = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+
+  function cell(text, opts={}) {
+    return new TableCell({
+      borders: cellBorders,
+      width: opts.width ? { size: opts.width, type: WidthType.DXA } : undefined,
+      rowSpan: opts.rowSpan,
+      columnSpan: opts.columnSpan,
+      shading: { fill: 'FFFFFF' },
+      children: [new Paragraph({
+        alignment: opts.center ? AlignmentType.CENTER : AlignmentType.LEFT,
+        children: [new TextRun({ text: String(text||''), bold: opts.bold||false, size: opts.size||20, font: 'Arial' })]
+      })]
+    });
+  }
+
+  const sections = [];
+  const meta = [state.grade, state.section, state.skill, state.activity, state.date].filter(Boolean).join(' · ');
+
+  // ── Title ──
+  sections.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: typeLabel(state.type), bold: true, size: 28, font: 'Arial' })] }));
+  sections.push(new Paragraph({ children: [new TextRun({ text: meta, size: 20, font: 'Arial', color: '555555' })] }));
+  sections.push(new Paragraph({ children: [] }));
+
+  if (state.type === 'rubrica') {
+    const crits = state.rubricaCriteria || state.criteria.map(n=>({nombre:n,d1:'',d2:'',d3:'',d4:''}));
+    const lvlLabels = [`1—${t('rubDef')}`, `2—${t('rubReg2')}`, `3—${t('rubSat')}`, `4—${t('rubBue')}`];
+    const lvlKeys = ['d1','d2','d3','d4'];
+
+    // Part 1 header
+    sections.push(new Paragraph({ children: [new TextRun({ text: t('rubDesc').toUpperCase(), bold: true, size: 20, font: 'Arial' })] }));
+    sections.push(new Paragraph({ children: [] }));
+
+    // Descriptor table
+    const descRows = [
+      new TableRow({ children: [
+        cell(t('criterionLabel'), {bold:true, width:2000}),
+        ...lvlLabels.map(l => cell(l, {bold:true, center:true}))
+      ]})
+    ];
+    crits.forEach((c,ci) => {
+      descRows.push(new TableRow({ children: [
+        cell(c.nombre, {bold:true, width:2000}),
+        ...lvlKeys.map(k => cell(state.scores[`rdesc-${ci}-${k}`] || c[k] || ''))
+      ]}));
+    });
+    sections.push(new Table({ rows: descRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+    sections.push(new Paragraph({ children: [] }));
+
+    // Part 2 header
+    sections.push(new Paragraph({ children: [new TextRun({ text: t('rubReg').toUpperCase(), bold: true, size: 20, font: 'Arial' })] }));
+    sections.push(new Paragraph({ children: [] }));
+
+    // Register table — header row 1 (criterion groups)
+    const abbrs = [t('rubD'), t('rubR'), t('rubS'), t('rubB')];
+    const regHeaderRow1 = new TableRow({ children: [
+      cell(t('colStudent'), {bold:true, rowSpan:2, width:2200}),
+      ...crits.flatMap((c,ci) => [
+        new TableCell({
+          borders: cellBorders,
+          columnSpan: 4,
+          shading: { fill: 'FFFFFF' },
+          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: c.nombre, bold: true, size: 18, font: 'Arial' })] })]
+        })
+      ]),
+      cell(t('colTotal'), {bold:true, rowSpan:2, center:true, width:600})
+    ]});
+
+    // Header row 2 (D R S B sub-headers)
+    const regHeaderRow2 = new TableRow({ children: [
+      ...crits.flatMap(() =>
+        abbrs.map((a,i) => cell(`${a}\n${i+1}`, {bold:true, center:true, size:16}))
+      )
+    ]});
+
+    const regRows = [regHeaderRow1, regHeaderRow2];
+    state.students.forEach((s,si) => {
+      let total = 0, allMarked = true;
+      const dataCells = crits.flatMap((_,ci) => {
+        const mk = state.scores[`rm-${si}-${ci}`] || 0;
+        if(mk > 0) total += mk; else allMarked = false;
+        return abbrs.map((_,lvi) => cell(mk===(lvi+1)?'X':'', {center:true, size:18}));
+      });
+      regRows.push(new TableRow({ children: [
+        cell(s, {width:2200}),
+        ...dataCells,
+        cell(allMarked ? String(total) : '—', {center:true, bold:true})
+      ]}));
+    });
+    sections.push(new Table({ rows: regRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+
+  } else if (state.type === 'rubrica_unica') {
+    const crits = state.rubricaCriteria || state.criteria.map(n=>({nombre:n,d1:'',d2:'',d3:'',d4:''}));
+    const lvlLabels2 = [t('rubDef'), t('rubReg2'), t('rubSat'), t('rubBue')];
+
+    // Usable width on Letter landscape with 0.625" margins = 15840 - 2*900 = 14040 DXA
+    const nameW = 1300, totalW = 600;
+    const remaining2 = 14040 - nameW - totalW;
+    const groupW = remaining2 / crits.length;
+    const subW = groupW / 4;
+
+    const critHeaderRow = new TableRow({ children: [
+      cell('', {width:nameW}),
+      ...crits.map(c => new TableCell({
+        borders: cellBorders, columnSpan: 4, width: {size:groupW, type:WidthType.DXA},
+        shading: {fill:'FFFFFF'},
+        children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: c.nombre, bold: true, size: 19, font: 'Arial' })] })]
+      })),
+      cell('', {width:totalW})
+    ]});
+
+    const levelLabelRow = new TableRow({ children: [
+      cell(t('colStudent'), {bold:true, size:18, width:nameW}),
+      ...crits.flatMap(() => lvlLabels2.map(l => cell(l, {bold:true, center:true, size:15, width:subW}))),
+      cell(t('colTotal'), {bold:true, center:true, size:16, width:totalW})
+    ]});
+
+    const numberRow2 = new TableRow({ children: [
+      cell('', {width:nameW}),
+      ...crits.flatMap(() => ['1','2','3','4'].map(n => cell(n, {bold:true, center:true, size:16, width:subW}))),
+      cell('', {width:totalW})
+    ]});
+
+    const descriptorRow2 = new TableRow({ children: [
+      cell('', {width:nameW}),
+      ...crits.flatMap((c,ci) => ['d1','d2','d3','d4'].map(k => cell(state.scores[`rdesc-${ci}-${k}`] || c[k] || '', {size:16, width:subW}))),
+      cell('', {width:totalW})
+    ]});
+
+    const studentRows2 = state.students.map((s,si) => {
+      let total = 0, allMarked = true;
+      const dataCells = crits.flatMap((c,ci) => {
+        const mk = state.scores[`ru-${si}-${ci}`] || 0;
+        if(mk > 0) total += mk; else allMarked = false;
+        return [1,2,3,4].map(lv => cell(mk===lv?'X':'', {center:true, width:subW}));
+      });
+      return new TableRow({ children: [
+        cell(s, {size:18, width:nameW}),
+        ...dataCells,
+        cell(allMarked ? String(total) : '—', {center:true, bold:true, width:totalW})
+      ]});
+    });
+
+    sections.push(new Table({
+      rows: [critHeaderRow, levelLabelRow, numberRow2, descriptorRow2, ...studentRows2],
+      width: { size: nameW + groupW*crits.length + totalW, type: WidthType.DXA }
+    }));
+
+  } else if (state.type === 'cotejo') {
+    const headerRow = new TableRow({ children: [
+      cell(t('colStudent'), {bold:true, width:2200}),
+      ...state.criteria.map(c => cell(c, {bold:true, center:true})),
+      cell(t('colAvg'), {bold:true, center:true, width:700})
+    ]});
+    const dataRows = state.students.map((s,si) => {
+      const vals = state.criteria.map((_,ci) => state.scores[`${si}-${ci}`]||0).filter(v=>v>0);
+      const avg = vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : '—';
+      return new TableRow({ children: [
+        cell(s, {width:2200}),
+        ...state.criteria.map((_,ci) => cell(state.scores[`${si}-${ci}`]||'', {center:true})),
+        cell(avg, {center:true, bold:true})
+      ]});
+    });
+    sections.push(new Table({ rows: [headerRow,...dataRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
+
+  } else if (state.type === 'estimacion') {
+    const opts = [t('estSFull'), t('estAFull'), t('estNFull')];
+    const h1 = new TableRow({ children: [
+      cell(t('colStudent'), {bold:true, rowSpan:2, width:2200}),
+      ...state.criteria.flatMap(c => [new TableCell({ borders: cellBorders, columnSpan:3, shading:{fill:'FFFFFF'}, children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:c,bold:true,size:18,font:'Arial'})]})]})])
+    ]});
+    const h2 = new TableRow({ children: [
+      ...state.criteria.flatMap(() => opts.map(o => cell(o.slice(0,2), {bold:true, center:true, size:16})))
+    ]});
+    const dataRows = state.students.map((s,si) => new TableRow({ children: [
+      cell(s, {width:2200}),
+      ...state.criteria.flatMap((_,ci) => opts.map((_,oi) => cell(state.scores[`em-${si}-${ci}`]===(oi+1)?'X':'', {center:true})))
+    ]}));
+    sections.push(new Table({ rows: [h1,h2,...dataRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
+
+  } else if (state.type === 'numerica') {
+    const headerRow = new TableRow({ children: [
+      cell(t('colStudent'), {bold:true, width:2200}),
+      ...state.criteria.map(c => cell(c, {bold:true, center:true})),
+      cell(t('colTotal'), {bold:true, center:true, width:700})
+    ]});
+    const dataRows = state.students.map((s,si) => {
+      const vals = state.criteria.map((_,ci) => parseFloat(state.scores[`num-${si}-${ci}`])||0);
+      return new TableRow({ children: [
+        cell(s, {width:2200}),
+        ...state.criteria.map((_,ci) => cell(state.scores[`num-${si}-${ci}`]||'', {center:true})),
+        cell(vals.reduce((a,b)=>a+b,0).toFixed(0), {center:true, bold:true})
+      ]});
+    });
+    sections.push(new Table({ rows: [headerRow,...dataRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
+
+  } else if (state.type === 'anecdotico') {
+    const headerRow = new TableRow({ children: [
+      cell(t('colStudent'), {bold:true, width:2200}),
+      cell(t('colObs'), {bold:true})
+    ]});
+    const dataRows = state.students.map((s,si) => new TableRow({ children: [
+      cell(s, {width:2200}),
+      cell(state.scores[`anec-${si}`]||'')
+    ]}));
+    sections.push(new Table({ rows: [headerRow,...dataRows], width: { size: 100, type: WidthType.PERCENTAGE } }));
+  }
+
+  try {
+    const isLandscape = (state.type==='rubrica'||state.type==='rubrica_unica'||state.type==='estimacion');
+    const doc = new Document({
+      sections: [{
+        properties: {
+          page: {
+            size: {
+              width: 12240,
+              height: 15840,
+              orientation: isLandscape ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT,
+            },
+            margin: { top: 900, right: 900, bottom: 900, left: 900 },
+          },
+        },
+        children: sections
+      }]
+    });
+    const blob = await Packer.toBlob(doc);
+    const filename = `instrumento_${state.grade}_${state.skill||'eval'}.docx`.replace(/\s+/g,'_');
+    const url = URL.createObjectURL(blob);
+
+    // Open in new tab — works in PWA standalone on Android
+    // Android will prompt "Open with Word / Drive / etc"
+    const newTab = window.open(url, '_blank');
+    if(!newTab){
+      // Fallback: direct download link
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    showToast('📝 Abriendo Word…');
+  } catch(err) {
+    showToast('⚠️ Error al generar Word');
+    console.error(err);
+  }
+}
+
+function exportCSV(){
+  syncState();
+  const crits=state.criteria;
+  const rows=[[t('colStudent'),...crits,t('colAvg')]];
+  state.students.forEach((s,si)=>{
+    const vals=crits.map((_,ci)=>{
+      if(state.type==='cotejo') return state.scores[`${si}-${ci}`]||'';
+      if(state.type==='numerica') return state.scores[`num-${si}-${ci}`]||'';
+      if(state.type==='estimacion') return state.scores[`em-${si}-${ci}`]||'';
+      if(state.type==='anecdotico') return state.scores[`anec-${si}`]||'';
+      return '';
+    });
+    const nums=vals.map(v=>parseFloat(v)).filter(n=>!isNaN(n));
+    const avg=nums.length?(nums.reduce((a,b)=>a+b,0)/nums.length).toFixed(1):'';
+    rows.push([s,...vals,avg]);
+  });
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`instrumento_${state.grade}_${state.skill||'eval'}.csv`.replace(/\s+/g,'_'); a.click();
+  showToast(t('csvToast'));
+}
+
+function saveTemplate(){
+  syncState();
+  const templates=JSON.parse(localStorage.getItem('instr2_templates')||'[]');
+  templates.unshift({id:Date.now(),name:`${typeLabel(state.type)} — ${state.grade} ${state.skill||''}`.trim(),grade:state.grade,skill:state.skill,activity:state.activity,type:state.type,criteria:[...state.criteria],outcomes:[...state.outcomes],date:new Date().toLocaleDateString(lang==='en'?'en-US':'es-PA')});
+  localStorage.setItem('instr2_templates',JSON.stringify(templates.slice(0,20)));
+  showToast(t('saveToast'));
+}
+
+function shareLink(){
+  syncState();
+  const data={g:state.grade,s:state.section,sk:state.skill,a:state.activity,tp:state.type,c:state.criteria,st:state.students,o:state.outcomes};
+  const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+  const url=location.href.split('?')[0]+'?d='+encoded;
+  if(navigator.clipboard) navigator.clipboard.writeText(url).then(()=>showToast(t('shareToast')));
+  else prompt('Link:',url);
+}
+
+function renderTemplates(){
+  const templates=JSON.parse(localStorage.getItem('instr2_templates')||'[]');
+  const list=document.getElementById('template-list');
+  if(!templates.length){list.innerHTML=`<div class="empty-state"><div class="es-icon">📂</div><p>${t('emptyTpl')}</p></div>`;return;}
+  list.innerHTML=templates.map(tpl=>`<div class="template-item" onclick="loadTemplate(${tpl.id})"><div><div class="ti-name">${escH(tpl.name)}</div><div class="ti-meta">${tpl.criteria.length} ${t('criteriaCount')} · ${t('savedOn')} ${tpl.date}</div></div><button class="ti-del" onclick="event.stopPropagation();deleteTemplate(${tpl.id})">×</button></div>`).join('');
+}
+
+function loadTemplate(id){
+  const tpl=JSON.parse(localStorage.getItem('instr2_templates')||'[]').find(x=>x.id===id);if(!tpl)return;
+  document.getElementById('cfg-grade').value=tpl.grade||'';
+  document.getElementById('cfg-skill').value=tpl.skill||'';
+  document.getElementById('cfg-activity').value=tpl.activity||'';
+  state.criteria=[...tpl.criteria]; state.type=tpl.type; state.outcomes=tpl.outcomes||[];
+  document.querySelectorAll('.type-card').forEach(c=>c.classList.toggle('selected',c.dataset.type===tpl.type));
+  showToast(t('loadToast')); goStep(1);
+}
+
+function deleteTemplate(id){
+  let t2=JSON.parse(localStorage.getItem('instr2_templates')||'[]').filter(x=>x.id!==id);
+  localStorage.setItem('instr2_templates',JSON.stringify(t2)); renderTemplates(); showToast(t('deleteToast'));
+}
+
+// ── Helpers ──
+function syncState(){ state.grade=document.getElementById('cfg-grade').value; state.section=document.getElementById('cfg-section').value; state.date=document.getElementById('cfg-date').value; state.skill=document.getElementById('cfg-skill').value; state.activity=document.getElementById('cfg-activity').value; }
+function syncCriteria(){ state.criteria=Array.from(document.querySelectorAll('#manual-criteria-list input')).map(i=>i.value.trim()).filter(Boolean); }
+function escH(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function showToast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2800); }
+function showLoading(msg){ document.getElementById('loading-msg').textContent=msg||'…'; document.getElementById('loading-overlay').style.display='flex'; }
+function hideLoading(){ document.getElementById('loading-overlay').style.display='none'; }
+
+async function readStream(res){
+  const reader=res.body.getReader(); const decoder=new TextDecoder(); let fullText='';
+  while(true){
+    const{done,value}=await reader.read(); if(done)break;
+    const chunk=decoder.decode(value,{stream:true});
+    for(const line of chunk.split('\n')){
+      if(!line.startsWith('data: '))continue;
+      const data=line.slice(6).trim(); if(data==='[DONE]')break;
+      try{ const p=JSON.parse(data); const d=p.choices?.[0]?.delta?.content; if(d)fullText+=d; }catch(e){}
+    }
+  }
+  return fullText;
+}
+
+async function clearCache(){
+  try{ const keys=await caches.keys(); await Promise.all(keys.map(k=>caches.delete(k))); const reg=await navigator.serviceWorker.getRegistration(); if(reg)await reg.unregister(); showToast('🔄 Caché borrado — recargando…'); setTimeout(()=>location.reload(true),800); }
+  catch(e){ location.reload(true); }
+}
+
+// ── Init ──
+document.getElementById('cfg-date').value=new Date().toISOString().split('T')[0];
+
+try{
+  const params=new URLSearchParams(location.search);
+  if(params.get('d')){
+    const data=JSON.parse(decodeURIComponent(escape(atob(params.get('d')))));
+    document.getElementById('cfg-grade').value=data.g||'';
+    document.getElementById('cfg-section').value=data.s||'';
+    document.getElementById('cfg-skill').value=data.sk||'';
+    document.getElementById('cfg-activity').value=data.a||'';
+    state.type=data.tp||'cotejo'; state.criteria=data.c||[]; state.students=data.st||[]; state.outcomes=data.o||[];
+    document.querySelectorAll('.type-card').forEach(c=>c.classList.toggle('selected',c.dataset.type===state.type));
+    renderStudents(); if(state.outcomes.length)renderOutcomes();
+    showToast(t('shareToast'));
+  }
+}catch(e){}
+
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+applyLang();
+</script>
+</body>
+</html>

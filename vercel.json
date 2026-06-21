@@ -1,0 +1,11 @@
+{
+  "functions": {
+    "api/groq.js": { "maxDuration": 60 }
+  },
+  "rewrites": [
+    { "source": "/", "destination": "/public/index.html" },
+    { "source": "/sw.js", "destination": "/public/sw.js" },
+    { "source": "/manifest.json", "destination": "/public/manifest.json" },
+    { "source": "/icons/(.*)", "destination": "/public/icons/$1" }
+  ]
+}

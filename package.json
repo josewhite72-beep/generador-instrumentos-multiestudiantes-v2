@@ -1,0 +1,6 @@
+{
+  "name": "generador-instrumentos-multiestudiantes",
+  "version": "1.0.0",
+  "description": "Generador de instrumentos de evaluación multi-estudiante para docentes ESL",
+  "private": true
+}
