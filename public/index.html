@@ -854,11 +854,25 @@ async function generateCriteria(){
   try {
     const model=document.getElementById('model-select').value;
     const res=await fetch(PROXY,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({messages:[{role:'user',content:buildPrompt()}],model,stream:true,response_format:{type:'json_object'}})});
-    if(!res.ok) throw new Error('HTTP '+res.status);
+      body:JSON.stringify({messages:[{role:'user',content:buildPrompt()}],model,stream:true})});
+    if(!res.ok){
+      const errBody=await res.text().catch(()=>'');
+      console.error('Proxy error', res.status, errBody);
+      throw new Error('HTTP '+res.status+': '+errBody.slice(0,200));
+    }
     const fullText=await readStream(res);
+    if(!fullText.trim()){
+      console.error('Empty response from model', model);
+      throw new Error('Respuesta vacía del modelo');
+    }
     const clean=fullText.replace(/```json|```/g,'').trim();
-    const parsed=JSON.parse(clean);
+    let parsed;
+    try {
+      parsed=JSON.parse(clean);
+    } catch(parseErr){
+      console.error('JSON parse failed. Raw text:', fullText);
+      throw new Error('JSON inválido: '+parseErr.message);
+    }
     if((state.type==='rubrica'||state.type==='rubrica_unica')&&parsed.criterios?.[0]?.nombre){
       state.rubricaCriteria=parsed.criterios;
       state.criteria=parsed.criterios.map(c=>c.nombre);
@@ -868,7 +882,10 @@ async function generateCriteria(){
     }
     renderManualCriteria();
     showToast(t('genOK'));
-  } catch(err){ showToast(t('genErr')); }
+  } catch(err){
+    console.error('generateCriteria failed:', err);
+    showToast(t('genErr')+' ('+err.message.slice(0,60)+')');
+  }
   hideLoading();
   btn.disabled=false;
   document.getElementById('btn-gen-label').textContent=t('btnGenLabel');
